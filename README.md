@@ -17,11 +17,10 @@
 2. Создать в корневой папке проекта файл `.env`, в котором нужно задать 
 API_URL.
 
-3. Подключить скрипты к разметке.
+3. Подключить модуль к разметке.
 ```html
 <body>
     ...
-    <script type="module" src="config.js"></script>
     <script type="module" src="module.js"></script>
 </body>
 ```

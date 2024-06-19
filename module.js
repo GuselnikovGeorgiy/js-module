@@ -1,14 +1,37 @@
 import { API_URL } from './config.js';
 
-function getCookies() {
-    return document.cookie.split(';').reduce((cookies, cookie) => {
-        const [name, value] = cookie.split('=').map(c => c.trim());
-        cookies[name] = value;
-        return cookies;
-    }, {});
+async function getIp() {
+    const ipResponse = await fetch('https://api.ipify.org?format=json');
+    const ipData = await ipResponse.json();
+    return ipData.ip;
 }
 
-// Function to get geolocation
+function getUserAgent() {
+    return navigator.userAgent;
+}
+
+function getScreenInfo() {
+    return `${screen.width}x${screen.height}`;
+}
+
+function getWindowInfo() {
+    return `${window.innerWidth}x${window.innerHeight}`;
+}
+
+function getDPI() {
+    const div = document.createElement("div");
+    div.style.width = "1in";
+    div.style.position = "fixed";
+    document.body.appendChild(div);
+    const ppi = div.offsetWidth;
+    document.body.removeChild(div);
+    return ppi;
+}
+
+function getOSInfo() {
+    return navigator.platform;
+}
+
 function getGeolocation() {
     return new Promise((resolve, reject) => {
         if (navigator.geolocation) {
@@ -25,91 +48,133 @@ function getGeolocation() {
     });
 }
 
-// Function to get pixels per inch (PPI)
-function getPPI() {
-    const div = document.createElement("div");
-    div.style.width = "1in";
-    div.style.position = "fixed";
-    document.body.appendChild(div);
-    const ppi = div.offsetWidth;
-    document.body.removeChild(div);
-    return ppi;
+function getCookies() {
+    return document.cookie.split(';').reduce((cookies, cookie) => {
+        const [name, value] = cookie.split('=').map(c => c.trim());
+        cookies[name] = value;
+        return cookies;
+    }, {});
 }
 
-// Initialize data collection
-async function collectUserData() {
-    const ipResponse = await fetch('https://api.ipify.org?format=json');
-    const ipData = await ipResponse.json();
-    const ip = ipData.ip;
+function getCurrentTime() {
+    return new Date().getTime();
+}
 
+function getConnectTime() {
     const connectTime = new Date();
+    return connectTime.toISOString();
+}
+
+function updateNavigationHistory() {
+    const currentPage = window.location.pathname.split("/").pop();
+    let navigationHistory = sessionStorage.getItem("navigation_history");
+    if (!navigationHistory) {
+        navigationHistory = [];
+    } else {
+        navigationHistory = JSON.parse(navigationHistory);
+    }
+    navigationHistory.push(currentPage);
+    sessionStorage.setItem("navigation_history", JSON.stringify(navigationHistory));
+}
+
+function updateExitTime() {
+    let pageTimeView = sessionStorage.getItem("page_views");
+    let exitTime = getCurrentTime();
+
+    if (pageTimeView) {
+        pageTimeView = JSON.parse(pageTimeView);
+    } else {
+        pageTimeView = [];
+    }
+
+    if (sessionStorage.getItem("current_page") && sessionStorage.getItem("entry_time")) {
+        let currentPage = sessionStorage.getItem("current_page");
+        let entryTime = parseInt(sessionStorage.getItem("entry_time"), 10);
+        let timeSpent = Math.round((exitTime - entryTime) / 1000 / 2);
+
+        let pageEntry = pageTimeView.find(entry => entry[currentPage]);
+
+        if (pageEntry) {
+            pageEntry[currentPage] += timeSpent;
+        } else {
+            let newEntry = {};
+            newEntry[currentPage] = timeSpent;
+            pageTimeView.push(newEntry);
+        }
+    }
+
+    sessionStorage.setItem("page_views", JSON.stringify(pageTimeView));
+}
+
+function updateEntryTime() {
+    let entryTime = getCurrentTime();
+    let currentPage = window.location.pathname.split("/").pop();
+    
+    sessionStorage.setItem("entry_time", entryTime);
+    sessionStorage.setItem("current_page", currentPage);
+}
+
+window.addEventListener('load', () => {
+    updateExitTime();
+    updateEntryTime();
+    updateNavigationHistory();
+    //collectUserData();
+});
+
+window.addEventListener('beforeunload', () => {
+    updateExitTime();
+});
+
+async function initLog() {
+    sessionStorage.setItem("ip", await getIp());
+    sessionStorage.setItem("user_agent", getUserAgent());
+    sessionStorage.setItem("screen_resolution", getScreenInfo());
+    sessionStorage.setItem("window_resolution", getWindowInfo());
+    sessionStorage.setItem("DPI", getDPI());
+    sessionStorage.setItem("OS", getOSInfo());
+    sessionStorage.setItem("geo_position", JSON.stringify(await getGeolocation()));
+    sessionStorage.setItem("cookies", JSON.stringify(getCookies()));
+    sessionStorage.setItem("connect_time", getConnectTime());
+}
+
+
+initLog();
+
+function collectUserData() {
+    const disconnect_time = new Date();
 
     const userData = {
-        ip_address: ip || null,
-        user_agent: navigator.userAgent || null,
-        screen_resolution: `${screen.width}x${screen.height}` || null,
-        window_resolution: `${window.innerWidth}x${window.innerHeight}` || null,
-        pixels_per_inch: getPPI() || null,
-        os_info: navigator.platform || null,
-        geo_position: await getGeolocation() || null,
-        cookies: getCookies() || null,
-        connect_time: connectTime.toISOString() || null,
-        disconnect_time: null,
-        page_views: [],
-        navigation_history: []
-    };
+        ip_address: sessionStorage.getItem("ip") || null,
+        user_agent: sessionStorage.getItem("user_agent") || null,
+        screen_resolution: sessionStorage.getItem("screen_resolution") || null,
+        window_resolution: sessionStorage.getItem("window_resolution") || null,
+        pixels_per_inch: sessionStorage.getItem("DPI") || null,
+        os_info: sessionStorage.getItem("OS") || null,
+        geo_position: sessionStorage.getItem("geo_location") || null,
+        cookies: sessionStorage.getItem("cookies") || null,
+        connect_time: sessionStorage.getItem("connect_time") || null,
+        disconnect_time: disconnect_time.toISOString(),
+        page_views: sessionStorage.getItem("page_views"),
+        navigation_history: sessionStorage.getItem("navigation_history")
+    }
 
-    let currentPageStart = new Date();
-    let currentUrl = location.href;
+    //console.log(userData);
+    return userData;
+}
 
-    userData.navigation_history.push(currentUrl);
-
-    window.addEventListener('beforeunload', () => {
-        const disconnectTime = new Date();
-        userData.disconnect_time = disconnectTime.toISOString();
-        userData.page_views.push({
-            page_url: currentUrl,
-            time_spent: Math.round((disconnectTime - currentPageStart) / 1000)
-        });
-
-        fetch(API_URL, {
+async function sendUserData() {
+    try {
+        const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(userData)
-        }).catch(() => {});
-    });
-
-    window.addEventListener('popstate', () => {
-        const currentPageEnd = new Date();
-        userData.page_views.push({
-            page_url: currentUrl,
-            time_spent: Math.round((currentPageEnd - currentPageStart) / 1000)
+            body: JSON.stringify(collectUserData())
         });
-
-        currentUrl = location.href;
-        currentPageStart = new Date();
-        userData.navigation_history.push(currentUrl);
-    });
-
-    window.addEventListener('pushstate', () => {
-        const currentPageEnd = new Date();
-        userData.page_views.push({
-            page_url: currentUrl,
-            time_spent: Math.round((currentPageEnd - currentPageStart) / 1000)
-        });
-
-        currentUrl = location.href;
-        currentPageStart = new Date();
-        userData.navigation_history.push(currentUrl);
-    });
-
-    history.pushState = ((f) => function pushState() {
-        const ret = f.apply(this, arguments);
-        window.dispatchEvent(new Event('pushstate'));
-        return ret;
-    })(history.pushState);
+        if (!response.ok) {
+            console.error('Failed to send data:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Error sending data:', error);
+    }
 }
-
-collectUserData();
