@@ -1,4 +1,5 @@
 import { API_URL } from './config.js';
+import { TIMER_INTERVAL_SECONDS } from './config.js';
 
 async function getIp() {
     const ipResponse = await fetch('https://api.ipify.org?format=json');
@@ -65,6 +66,10 @@ function getConnectTime() {
     return connectTime.toISOString();
 }
 
+function getCurrentPage() {
+    return window.location.pathname.split("/").pop();
+}
+
 function updateNavigationHistory() {
     const currentPage = window.location.pathname.split("/").pop();
     let navigationHistory = sessionStorage.getItem("navigation_history");
@@ -78,32 +83,33 @@ function updateNavigationHistory() {
 }
 
 function updateExitTime() {
-    let pageTimeView = sessionStorage.getItem("page_views");
+    let pageViews = sessionStorage.getItem("page_views");
     let exitTime = getCurrentTime();
 
-    if (pageTimeView) {
-        pageTimeView = JSON.parse(pageTimeView);
+    if (pageViews) {
+        pageViews = JSON.parse(pageViews);
     } else {
-        pageTimeView = [];
+        pageViews = [];
     }
 
     if (sessionStorage.getItem("current_page") && sessionStorage.getItem("entry_time")) {
         let currentPage = sessionStorage.getItem("current_page");
         let entryTime = parseInt(sessionStorage.getItem("entry_time"), 10);
-        let timeSpent = Math.round((exitTime - entryTime) / 1000 / 2);
+        let timeSpent = Math.round((exitTime - entryTime) / 1000);
 
-        let pageEntry = pageTimeView.find(entry => entry[currentPage]);
+        let pageEntry = pageViews.find(entry => entry.page_url === currentPage);
 
         if (pageEntry) {
-            pageEntry[currentPage] += timeSpent;
+            pageEntry.time_spent += timeSpent;
         } else {
-            let newEntry = {};
-            newEntry[currentPage] = timeSpent;
-            pageTimeView.push(newEntry);
+            pageViews.push({
+                page_url: currentPage,
+                time_spent: timeSpent
+            });
         }
     }
 
-    sessionStorage.setItem("page_views", JSON.stringify(pageTimeView));
+    sessionStorage.setItem("page_views", JSON.stringify(pageViews));
 }
 
 function updateEntryTime() {
@@ -134,11 +140,11 @@ async function initLog() {
     sessionStorage.setItem("OS", getOSInfo());
     sessionStorage.setItem("geo_position", JSON.stringify(await getGeolocation()));
     sessionStorage.setItem("cookies", JSON.stringify(getCookies()));
-    sessionStorage.setItem("connect_time", getConnectTime());
+    if (!sessionStorage.getItem("connect_time")) {
+        sessionStorage.setItem("connect_time", getConnectTime());
+    }
+    
 }
-
-
-initLog();
 
 function collectUserData() {
     const disconnect_time = new Date();
@@ -148,28 +154,29 @@ function collectUserData() {
         user_agent: sessionStorage.getItem("user_agent") || null,
         screen_resolution: sessionStorage.getItem("screen_resolution") || null,
         window_resolution: sessionStorage.getItem("window_resolution") || null,
-        pixels_per_inch: sessionStorage.getItem("DPI") || null,
+        dots_per_inch: parseInt(sessionStorage.getItem("DPI")) || null,
         os_info: sessionStorage.getItem("OS") || null,
-        geo_position: sessionStorage.getItem("geo_location") || null,
-        cookies: sessionStorage.getItem("cookies") || null,
+        geo_position: JSON.parse(sessionStorage.getItem("geo_position")),
+        cookies: JSON.parse(sessionStorage.getItem("cookies")) || null,
         connect_time: sessionStorage.getItem("connect_time") || null,
         disconnect_time: disconnect_time.toISOString(),
-        page_views: sessionStorage.getItem("page_views"),
-        navigation_history: sessionStorage.getItem("navigation_history")
+        page_views: JSON.parse(sessionStorage.getItem("page_views")) || null,
+        navigation_history: JSON.parse(sessionStorage.getItem("navigation_history")) || null,
     }
-
-    //console.log(userData);
+    console.log(userData);
     return userData;
 }
 
 async function sendUserData() {
+    const user_data = collectUserData()
+    
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(collectUserData())
+            body: JSON.stringify(user_data)
         });
         if (!response.ok) {
             console.error('Failed to send data:', response.statusText);
@@ -177,4 +184,14 @@ async function sendUserData() {
     } catch (error) {
         console.error('Error sending data:', error);
     }
+
+    sessionStorage.clear();
+    initLog();
 }
+
+initLog();
+
+setTimeout(() => {
+    sendUserData();
+    setInterval(sendUserData, TIMER_INTERVAL_SECONDS * 1000);
+}, TIMER_INTERVAL_SECONDS * 1000);

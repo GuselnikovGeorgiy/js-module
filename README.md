@@ -14,8 +14,7 @@
    git clone https://github.com/your_username/your_repository.git
    cd your_repository
 
-2. Создать в корневой папке проекта файл `.env`, в котором нужно задать 
-API_URL.
+2. Задать настройки в файле конфига API_URL и TIMER_INTERVAL_SECONDS.
 
 3. Подключить модуль к разметке.
 ```html
