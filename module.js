@@ -124,7 +124,6 @@ window.addEventListener('load', () => {
     updateExitTime();
     updateEntryTime();
     updateNavigationHistory();
-    //collectUserData();
 });
 
 window.addEventListener('beforeunload', () => {
@@ -163,7 +162,7 @@ function collectUserData() {
         page_views: JSON.parse(sessionStorage.getItem("page_views")) || null,
         navigation_history: JSON.parse(sessionStorage.getItem("navigation_history")) || null,
     }
-    console.log(userData);
+    console.log(userData); // debug
     return userData;
 }
 
