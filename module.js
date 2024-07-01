@@ -1,6 +1,13 @@
 import { API_URL } from './config.js';
 import { TIMER_INTERVAL_SECONDS } from './config.js';
 
+function getSessionId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
 async function getIp() {
     const ipResponse = await fetch('https://api.ipify.org?format=json');
     const ipData = await ipResponse.json();
@@ -142,6 +149,9 @@ async function initLog() {
     if (!sessionStorage.getItem("connect_time")) {
         sessionStorage.setItem("connect_time", getConnectTime());
     }
+    if (!sessionStorage.getItem("session_id")) {
+        sessionStorage.setItem("session_id", getSessionId());
+    }
     
 }
 
@@ -161,13 +171,28 @@ function collectUserData() {
         disconnect_time: disconnect_time.toISOString(),
         page_views: JSON.parse(sessionStorage.getItem("page_views")) || null,
         navigation_history: JSON.parse(sessionStorage.getItem("navigation_history")) || null,
+        session_id: sessionStorage.getItem("session_id")
     }
     console.log(userData); // debug
     return userData;
 }
 
+function clearStorage() {
+    sessionStorage.removeItem("ip");
+    sessionStorage.removeItem("user_agent");
+    sessionStorage.removeItem("screen_resolution");
+    sessionStorage.removeItem("window_resolution");
+    sessionStorage.removeItem("DPI");
+    sessionStorage.removeItem("OS");
+    sessionStorage.removeItem("geo_position");
+    sessionStorage.removeItem("cookies");
+    sessionStorage.removeItem("connect_time");
+    sessionStorage.removeItem("page_views");
+    sessionStorage.removeItem("navigation_history");
+}
+
 async function sendUserData() {
-    const user_data = collectUserData()
+    const user_data = collectUserData();
     
     try {
         const response = await fetch(API_URL, {
@@ -177,14 +202,15 @@ async function sendUserData() {
             },
             body: JSON.stringify(user_data)
         });
-        if (!response.ok) {
-            console.error('Failed to send data:', response.statusText);
-        }
     } catch (error) {
-        console.error('Error sending data:', error);
+        if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+            console.error('Error sending data: connection refused');
+        } else {
+            console.error('Error sending data:', error.message);
+        }
     }
 
-    sessionStorage.clear();
+    clearStorage();
     initLog();
 }
 
